@@ -1,0 +1,32 @@
+#compdef dozed
+#
+# Completion script for dozed
+#
+
+local events=('timeout:Execute timeout command if there is no activity for timeout seconds'
+			  'before-sleep:Execute before-sleep command before sleep'
+			  'after-resume:Execute after-resume command after sleep'
+			  'lock:Execute command when elogind asks the session to lock'
+			  'unlock:Execute command when elogind asks the session to unlock')
+local resume=('resume:Execute command when there is activity again')
+
+if (($#words <= 2)); then
+	_describe -t "events" 'dozed' events
+	_arguments -C \
+			   '(-h --help)'{-h,--help}'[Show help message and quit]' \
+			   '(-d)'-d'[Enable debug output]' \
+			   '(-w)'-w'[Wait for command to finish executing before continuing]' \
+			   '--no-config[Ignore config files]' \
+			   '--dry-run[Validate and print events]' \
+			   '--validate-config[Validate configuration and exit]' \
+			   '--print-events[Print parsed events]' \
+			   '--ignore-fullscreen[Do not suppress idle in fullscreen apps]' \
+			   '--fullscreen-policy[Fullscreen behavior]:policy:(suppress ignore)'
+
+elif  [[ "$words[-3]" == before-sleep || "$words[-3]" == after-resume || "$words[-3]" == lock || "$words[-3]" == unlock || "$words[-3]" == resume ]]; then
+	_describe -t "events" 'dozed' events
+
+elif [[ "$words[-4]" == timeout ]]; then
+		_describe -t "events" 'dozed' events
+		_describe -t "resume" 'dozed' resume
+fi

@@ -1,6 +1,6 @@
-# swaymsg(1) completion
+# dozed(1) completion
 
-_swayidle()
+_dozed()
 {
   local cur prev events short
   _get_comp_words_by_ref -n : cur prev
@@ -10,12 +10,21 @@ _swayidle()
   events=(
     'timeout'
     'before-sleep'
+    'after-resume'
+    'lock'
+    'unlock'
   )
 
   short=(
     -h
     -d
     -w
+    --no-config
+    --dry-run
+    --validate-config
+    --print-events
+    --ignore-fullscreen
+    --fullscreen-policy
   )
 
   if [ "$prev" = timeout ]; then
@@ -32,11 +41,19 @@ _swayidle()
   fi
 
   case "$prev" in
+    --fullscreen-policy)
+      COMPREPLY=($(compgen -W "suppress ignore" -- "$cur"))
+      return
+      ;;
     resume)
       COMPREPLY=($(compgen -c -- "$cur"))
       return
       ;;
     before-sleep)
+      COMPREPLY=($(compgen -c -- "$cur"))
+      return
+      ;;
+    after-resume|lock|unlock)
       COMPREPLY=($(compgen -c -- "$cur"))
       return
       ;;
@@ -46,4 +63,4 @@ _swayidle()
   COMPREPLY+=($(compgen -W "${short[*]}" -- "$cur"))
 
 } &&
-complete -F _swayidle swayidle
+complete -F _dozed dozed

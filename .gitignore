@@ -1,1 +1,9 @@
-build
+/build/
+/.builds/
+/.agents/
+/.codex/
+
+*.log
+*.swp
+*.swo
+*~
