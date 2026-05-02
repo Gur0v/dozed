@@ -1,0 +1,107 @@
+.TH DOZED 1
+.SH NAME
+dozed \- lightweight idle manager for Wayland compositors
+.SH SYNOPSIS
+.B dozed
+[\fIoptions\fR] [\fIevents...\fR]
+.SH DESCRIPTION
+.B dozed
+listens for idle activity through the Wayland
+.B ext-idle-notify-v1
+protocol and executes configured commands. It can run against any compositor
+that exposes the protocol.
+.PP
+.B dozed
+is a fork of
+.B swayidle.
+The implementation has been largely rewritten, but the event model and much of
+the behavior are inherited from swayidle.
+.PP
+dozed does not depend on systemd. If built with login1 D-Bus support, it can
+also listen for sleep, resume, lock, and unlock events from a login1
+implementation.
+.PP
+If the compositor exposes
+.B zwlr_foreign_toplevel_manager_v1,
+dozed will not execute idle timeout commands while any toplevel window is
+fullscreen, unless
+.B --ignore-fullscreen
+or
+.B --fullscreen-policy ignore
+is used.
+.SH OPTIONS
+.TP
+.BI \-C " path"
+Use the specified config file.
+.TP
+.B \-h, --help
+Show help and quit.
+.TP
+.B \-d
+Enable debug output.
+.TP
+.B \-w
+Wait for each command to finish before continuing.
+.TP
+.BI \-S " seat-name"
+Specify which Wayland seat to use.
+.TP
+.B --no-config
+Do not load any config file.
+.TP
+.B --dry-run
+Validate configuration and command-line events, print the parsed events, and
+exit without connecting to Wayland or running commands.
+.TP
+.B --validate-config
+Validate configuration and command-line events, then exit.
+.TP
+.B --print-events
+Print parsed events, then exit.
+.TP
+.B --ignore-fullscreen
+Do not suppress idle timeout commands while a fullscreen app is active.
+.TP
+.BI --fullscreen-policy " suppress|ignore"
+Choose fullscreen behavior. The default is
+.BR suppress .
+.SH EVENTS
+.TP
+.BI timeout " timeout command " [resume\  "resume-command" ]
+Execute the timeout command if there is no activity for
+.I timeout
+seconds. If
+.B resume
+is specified, the resume command runs when activity resumes.
+.TP
+.BI before-sleep " command"
+When built with login1 support, execute command before the system sleeps.
+.TP
+.BI after-resume " command"
+When built with login1 support, execute command after the system resumes.
+.TP
+.BI lock " command"
+When built with login1 support, execute command when the login1 session asks
+the session to lock.
+.TP
+.BI unlock " command"
+When built with login1 support, execute command when the login1 session asks
+the session to unlock.
+.PP
+All commands are executed through
+.BR "sh -c" .
+.SH SIGNALS
+.TP
+.B SIGTERM, SIGINT
+Run all pending resume commands and terminate.
+.TP
+.B SIGUSR1
+Immediately enter idle state.
+.SH EXAMPLE
+.nf
+dozed -w \\
+	timeout 300 'swaylock -f -c 000000' \\
+	timeout 600 'wlopm --off "*"' \\
+		resume 'wlopm --on "*"' \\
+	before-sleep 'swaylock -f -c 000000'
+.fi

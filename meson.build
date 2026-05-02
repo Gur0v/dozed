@@ -21,7 +21,7 @@ add_project_arguments([
 wayland_client = dependency('wayland-client')
 wayland_protos = dependency('wayland-protocols', version: '>=1.40')
 dbus = dependency('dbus-1', required: get_option('logind'))
-scdoc = find_program('scdoc', required: get_option('man-pages'))
+scdoc = find_program('scdoc', required: false)
 wayland_scanner = dependency('wayland-scanner', native: true, version: '>=1.14.91')
 wayland_scanner_prog = find_program(wayland_scanner.get_variable('wayland_scanner'), native: true)
 
@@ -93,27 +93,22 @@ test(
 	)
 )
 
-if scdoc.found()
+if not get_option('man-pages').disabled()
 	mandir = get_option('mandir')
-	man_files = [
-		'dozed.1.scd',
-	]
-	foreach filename : man_files
-		topic = filename.split('.')[-3].split('/')[-1]
-		section = filename.split('.')[-2]
-		output = '@0@.@1@'.format(topic, section)
-
+	if scdoc.found()
 		custom_target(
-			output,
-			input: filename,
-			output: output,
+			'dozed.1',
+			input: 'dozed.1.scd',
+			output: 'dozed.1',
 			command: scdoc,
 			feed: true,
 			capture: true,
 			install: true,
-			install_dir: '@0@/man@1@'.format(mandir, section)
+			install_dir: mandir / 'man1'
 		)
-	endforeach
+	else
+		install_data('dozed.1', install_dir: mandir / 'man1')
+	endif
 endif
 
 subdir('completions')

@@ -10,9 +10,9 @@ dozed is a fork of swayidle. Most of the original C implementation has been
 replaced, but the command model and a fair amount of the behavior still follow
 swayidle's design.
 
-dozed is implemented in Rust and does not depend on systemd. Optional login1
-D-Bus hooks can be enabled at build time for sleep, resume, lock, and unlock
-events.
+dozed is implemented in Rust and does not depend on systemd. Login1 D-Bus hooks
+are enabled by default when the dbus development files are available, and are
+used for sleep, resume, lock, and unlock events.
 
 When the compositor exposes `zwlr_foreign_toplevel_manager_v1`, dozed
 suppresses idle timeout commands while any toplevel is fullscreen.
@@ -32,7 +32,7 @@ Install dependencies:
 * rustc \*
 * wayland
 * wayland-protocols \*
-* dbus (optional, for login1 hooks)
+* dbus (for login1 hooks)
 * [scdoc](https://git.sr.ht/~sircmpwn/scdoc) (optional: man pages) \*
 * git \*
 
@@ -41,5 +41,12 @@ _\* Compile-time dependency_
 Run these commands:
 
     meson build/
+    ninja -C build/
+    sudo ninja -C build/ install
+
+This builds with login1 support by default when dbus is available. To build
+without sleep, resume, lock, and unlock hooks:
+
+    meson setup build/ -Dlogind=disabled
     ninja -C build/
     sudo ninja -C build/ install
