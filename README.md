@@ -22,12 +22,6 @@ watching a video, presenting, or sitting in a Zoom meeting could still hit the
 normal idle timeout and lock or blank the screen. dozed treats fullscreen apps as
 a signal that the user likely does not want idle actions to fire.
 
-Useful development checks:
-
-    dozed --dry-run
-    dozed --no-config timeout 5 'notify-send dozed idle'
-    dozed --fullscreen-policy ignore timeout 5 'notify-send dozed idle'
-
 ## Installation
 
 ### Compiling from Source
