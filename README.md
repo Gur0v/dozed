@@ -1,26 +1,28 @@
 # dozed
 
-This is a lightweight idle management daemon for Wayland compositors. It is
-compatible with any compositor which implements the
+A lightweight idle management daemon for Wayland compositors, and a drop-in
+replacement for [swayidle](https://github.com/swaywm/swayidle). Compatible with
+any compositor that implements the
 [ext-idle-notify](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/tree/main/staging/ext-idle-notify)
-protocol. See the man page, [dozed(1)](./dozed.1.scd), for instructions
-on configuring dozed.
+protocol. See the man page, [dozed(1)](./dozed.1.scd), for full configuration
+reference.
 
-dozed is a fork of swayidle. Most of the original C implementation has been
-replaced, but the command model and a fair amount of the behavior still follow
-swayidle's design.
+dozed is a fork of swayidle. The command model and general behavior follow
+swayidle's design, but most of the implementation has been rewritten in Rust.
+Existing swayidle configs and command-line invocations work with dozed without
+modification.
 
-dozed is implemented in Rust and does not depend on systemd. Login1 D-Bus hooks
-are enabled by default when the dbus development files are available, and are
-used for sleep, resume, lock, and unlock events.
-
-When the compositor exposes `zwlr_foreign_toplevel_manager_v1`, dozed
-suppresses idle timeout commands while any toplevel is fullscreen.
+## Why dozed?
 
 The main reason for the fork is fullscreen-aware idle behavior. With swayidle,
-watching a video, presenting, or sitting in a Zoom meeting could still hit the
-normal idle timeout and lock or blank the screen. dozed treats fullscreen apps as
-a signal that the user likely does not want idle actions to fire.
+watching a video, giving a presentation, or sitting in a video call can still
+trigger the idle timeout and lock or blank the screen. When the compositor
+exposes `zwlr_foreign_toplevel_manager_v1`, dozed suppresses idle timeout
+commands while any toplevel window is fullscreen.
+
+dozed also drops the systemd dependency. Login1 D-Bus hooks (sleep, resume,
+lock, unlock) are enabled by default whenever the dbus development files are
+available, and work with any logind-compatible implementation.
 
 ## Installation
 
@@ -28,13 +30,13 @@ a signal that the user likely does not want idle actions to fire.
 
 Install dependencies:
 
-* meson \*
-* rustc \*
-* wayland
-* wayland-protocols \*
-* dbus (for login1 hooks)
-* [scdoc](https://git.sr.ht/~sircmpwn/scdoc) (optional: man pages) \*
-* git \*
+- meson \*
+- rustc \*
+- wayland
+- wayland-protocols \*
+- dbus (for login1 hooks)
+- [scdoc](https://git.sr.ht/~sircmpwn/scdoc) (optional: man pages) \*
+- git \*
 
 _\* Compile-time dependency_
 
@@ -50,3 +52,8 @@ without sleep, resume, lock, and unlock hooks:
     meson setup build/ -Dlogind=disabled
     ninja -C build/
     sudo ninja -C build/ install
+
+## License
+
+dozed is licensed under the [GNU General Public License v3.0](./LICENSE).
+swayidle, on which dozed is based, is licensed under the MIT License.
