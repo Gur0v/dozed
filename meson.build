@@ -55,8 +55,15 @@ conf_data.set10('HAVE_LOGIND', dbus.found())
 config_header = configure_file(output: 'config.h', configuration: conf_data)
 
 rust_args = []
+test_rust_args = []
+if get_option('buildtype') == 'release' or get_option('buildtype') == 'minsize'
+	rust_args += ['-C', 'lto']
+	rust_args += ['-C', 'codegen-units=1']
+endif
+rust_args += ['-C', 'panic=abort']
 if dbus.found()
 	rust_args += ['--cfg', 'have_logind']
+	test_rust_args += ['--cfg', 'have_logind']
 endif
 
 executable(
@@ -89,7 +96,7 @@ test(
 			wayland_client,
 			dbus,
 		],
-		rust_args: rust_args + ['--test'],
+		rust_args: test_rust_args + ['--test'],
 	)
 )
 

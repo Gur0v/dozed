@@ -22,6 +22,7 @@ typedef void (*dozed_logind_cb)(void *data, int event);
 struct dozed_seat {
 	struct wl_seat *proxy;
 	char *name;
+	uint32_t global_name;
 };
 
 struct dozed_wl {
@@ -37,6 +38,9 @@ struct dozed_wl {
 	size_t toplevel_count;
 	size_t toplevel_cap;
 	int fullscreen_count;
+	uint32_t idle_notifier_name;
+	uint32_t toplevel_manager_name;
+	int dead;
 };
 
 struct dozed_notification {
@@ -202,7 +206,12 @@ static void push_seat(struct dozed_wl *ctx, struct wl_registry *registry,
 
 	struct dozed_seat *seat = &ctx->seats[ctx->seat_count++];
 	memset(seat, 0, sizeof(*seat));
+	seat->global_name = name;
 	seat->proxy = wl_registry_bind(registry, name, &wl_seat_interface, 2);
+	if (!seat->proxy) {
+		ctx->seat_count--;
+		return;
+	}
 	wl_seat_add_listener(seat->proxy, &seat_listener, seat);
 }
 
@@ -213,13 +222,19 @@ static void registry_handle_global(void *data, struct wl_registry *registry,
 		uint32_t bind_version = version > 2 ? 2 : version;
 		ctx->idle_notifier = wl_registry_bind(
 			registry, name, &ext_idle_notifier_v1_interface, bind_version);
+		if (ctx->idle_notifier) {
+			ctx->idle_notifier_name = name;
+		}
 	} else if (strcmp(interface,
 			zwlr_foreign_toplevel_manager_v1_interface.name) == 0) {
 		uint32_t bind_version = version > 3 ? 3 : version;
 		ctx->toplevel_manager = wl_registry_bind(registry, name,
 			&zwlr_foreign_toplevel_manager_v1_interface, bind_version);
-		zwlr_foreign_toplevel_manager_v1_add_listener(
-			ctx->toplevel_manager, &manager_listener, ctx);
+		if (ctx->toplevel_manager) {
+			ctx->toplevel_manager_name = name;
+			zwlr_foreign_toplevel_manager_v1_add_listener(
+				ctx->toplevel_manager, &manager_listener, ctx);
+		}
 	} else if (strcmp(interface, wl_seat_interface.name) == 0) {
 		push_seat(ctx, registry, name);
 	}
@@ -227,6 +242,48 @@ static void registry_handle_global(void *data, struct wl_registry *registry,
 
 static void registry_handle_global_remove(void *data,
 		struct wl_registry *registry, uint32_t name) {
+	struct dozed_wl *ctx = data;
+	if (name == ctx->idle_notifier_name) {
+		ctx->dead = 1;
+		if (ctx->idle_notifier) {
+			ext_idle_notifier_v1_destroy(ctx->idle_notifier);
+			ctx->idle_notifier = NULL;
+		}
+		ctx->idle_notifier_name = 0;
+		return;
+	}
+	if (name == ctx->toplevel_manager_name) {
+		for (size_t i = 0; i < ctx->toplevel_count; ++i) {
+			destroy_toplevel(&ctx->toplevels[i]);
+		}
+		free(ctx->toplevels);
+		ctx->toplevels = NULL;
+		ctx->toplevel_count = 0;
+		ctx->toplevel_cap = 0;
+		if (ctx->toplevel_manager) {
+			zwlr_foreign_toplevel_manager_v1_destroy(ctx->toplevel_manager);
+			ctx->toplevel_manager = NULL;
+		}
+		ctx->toplevel_manager_name = 0;
+		ctx->fullscreen_count = 0;
+		return;
+	}
+	for (size_t i = 0; i < ctx->seat_count; ++i) {
+		if (ctx->seats[i].global_name == name) {
+			free(ctx->seats[i].name);
+			if (ctx->seats[i].proxy) {
+				if (ctx->seat == ctx->seats[i].proxy) {
+					ctx->seat = NULL;
+					ctx->dead = 1;
+				}
+				wl_seat_destroy(ctx->seats[i].proxy);
+			}
+			memmove(&ctx->seats[i], &ctx->seats[i + 1],
+				(ctx->seat_count - i - 1) * sizeof(*ctx->seats));
+			ctx->seat_count--;
+			return;
+		}
+	}
 }
 
 static const struct wl_registry_listener registry_listener = {
@@ -292,30 +349,39 @@ void dozed_wayland_destroy(struct dozed_wl *ctx) {
 }
 
 int dozed_wayland_fd(struct dozed_wl *ctx) {
+	if (!ctx || ctx->dead) {
+		return -1;
+	}
 	return wl_display_get_fd(ctx->display);
 }
 
 int dozed_wayland_has_idle(struct dozed_wl *ctx) {
-	return ctx->idle_notifier != NULL;
+	return ctx && ctx->idle_notifier != NULL && !ctx->dead;
 }
 
 int dozed_wayland_has_seat(struct dozed_wl *ctx) {
-	return ctx->seat != NULL;
+	return ctx && ctx->seat != NULL && !ctx->dead;
 }
 
 int dozed_wayland_has_toplevel_manager(struct dozed_wl *ctx) {
-	return ctx->toplevel_manager != NULL;
+	return ctx && ctx->toplevel_manager != NULL;
 }
 
 int dozed_wayland_has_fullscreen(struct dozed_wl *ctx) {
-	return ctx->fullscreen_count > 0;
+	return ctx && ctx->fullscreen_count > 0;
 }
 
 int dozed_wayland_flush(struct dozed_wl *ctx) {
+	if (!ctx || ctx->dead) {
+		return -1;
+	}
 	return wl_display_flush(ctx->display);
 }
 
 int dozed_wayland_dispatch(struct dozed_wl *ctx) {
+	if (!ctx || ctx->dead) {
+		return -1;
+	}
 	int ret = wl_display_dispatch(ctx->display);
 	if (ret < 0) {
 		return -errno;
@@ -324,6 +390,9 @@ int dozed_wayland_dispatch(struct dozed_wl *ctx) {
 }
 
 int dozed_wayland_roundtrip(struct dozed_wl *ctx) {
+	if (!ctx || ctx->dead) {
+		return -1;
+	}
 	return wl_display_roundtrip(ctx->display);
 }
 
@@ -347,7 +416,7 @@ static const struct ext_idle_notification_v1_listener notification_listener = {
 struct dozed_notification *dozed_notification_create(
 		struct dozed_wl *ctx, int timeout_ms, int obey_inhibitors,
 		dozed_idle_cb callback, void *data) {
-	if (!ctx || !ctx->idle_notifier || !ctx->seat || timeout_ms < 0) {
+	if (!ctx || !ctx->idle_notifier || !ctx->seat || timeout_ms < 0 || ctx->dead) {
 		return NULL;
 	}
 
@@ -366,6 +435,10 @@ struct dozed_notification *dozed_notification_create(
 	} else {
 		notif->proxy = ext_idle_notifier_v1_get_input_idle_notification(
 			ctx->idle_notifier, (uint32_t)timeout_ms, ctx->seat);
+	}
+	if (!notif->proxy) {
+		free(notif);
+		return NULL;
 	}
 	ext_idle_notification_v1_add_listener(
 		notif->proxy, &notification_listener, notif);
@@ -493,7 +566,11 @@ static int set_session(struct dozed_logind *ctx) {
 			DBUS_TYPE_OBJECT_PATH, &path,
 			DBUS_TYPE_INVALID)) {
 		ctx->session_path = strdup(path);
-		ret = 0;
+		if (!ctx->session_path) {
+			ret = -1;
+		} else {
+			ret = 0;
+		}
 	}
 
 cleanup:
@@ -639,6 +716,9 @@ void dozed_logind_destroy(struct dozed_logind *ctx) {
 
 int dozed_logind_fd(struct dozed_logind *ctx) {
 	int fd = -1;
+	if (!ctx || !ctx->bus) {
+		return -1;
+	}
 	if (!dbus_connection_get_unix_fd(ctx->bus, &fd)) {
 		return -1;
 	}
@@ -646,6 +726,9 @@ int dozed_logind_fd(struct dozed_logind *ctx) {
 }
 
 int dozed_logind_process(struct dozed_logind *ctx) {
+	if (!ctx || !ctx->bus) {
+		return -1;
+	}
 	if (!dbus_connection_read_write(ctx->bus, 0)) {
 		return -1;
 	}
